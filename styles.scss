@@ -1,0 +1,44 @@
+/*-- scss:defaults --*/
+
+$font-family-sans-serif: Arial;
+
+// colors
+
+$navbar-bg: #008080;
+
+/*-- scss:rules --*/
+
+
+.nav-item > a:hover {
+  color: #70A494;
+}
+
+.nav-link {
+  color: #F0F0F0;
+}
+
+.tabset .nav-link {
+  color: #70A494;
+}
+
+/* .nav-item > a:focus {
+  color: #F6EDBD;
+} */
+
+.navbar .navbar-nav .active {
+  background-color: #DE8A5A;
+}
+
+.quarto-dashboard #quarto-dashboard-header .navbar .navbar-nav .active {
+  background-color: #DE8A5A;
+}
+
+.bslib-value-box .value-box-value {
+  font-weight: 600;
+}  
+
+
+.card-header {
+  background-color: #f1f1f1;
+}
+  

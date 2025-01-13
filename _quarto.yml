@@ -1,0 +1,20 @@
+project:
+  type: website
+  output-dir: docs
+
+website:
+  title: "Open Payments"
+  sidebar:
+    contents:
+      - href: index.qmd
+        text: Home
+      - href: dashboard.qmd
+        text: Dashboard
+
+format:
+  html:
+    theme: [cosmo, styles.scss]
+    toc: true
+
+
+

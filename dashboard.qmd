@@ -1,0 +1,694 @@
+---
+title: "CMS Research Payments 2023"
+format: 
+  dashboard:
+    theme: styles.scss
+    orientation: columns
+    nav-buttons: [github]
+    github: https://github.com/sgrever/
+echo: false
+---
+
+```{r}
+#| output: false
+library(dplyr)
+library(tidyr)
+library(stringr)
+library(glue)
+library(forcats)
+library(ggplot2)
+library(scales)
+library(tidytext)
+library(ggwordcloud)
+library(treemapify)
+library(sf)
+library(leaflet)
+library(DT)
+```
+
+
+```{r}
+#| output: false
+payments <- readRDS("data/payments_clean.rds")
+payments_geo <- readRDS("data/payments_geo.rds")
+
+dark_green <- '#008080'
+med_green <- '#70A494'
+light_green <- '#B4C8A8'
+yellow <- '#F6EDBD'
+light_orange <- '#EDBB8A'
+med_orange <- '#DE8A5A'
+dark_orange <- '#CA562C'
+white <- '#FFFFFF'
+```
+
+
+
+# Overview
+
+
+## Col 1 {width="25%"}
+
+
+```{r}
+#| content: valuebox 
+#| title: Payments
+#| color: "#F6EDBD"
+
+list(value = comma(nrow(payments)))
+```
+
+```{r}
+#| content: valuebox 
+#| title: Payees
+#| color: "#70A494"
+
+list(value = comma(length(unique(payments$payee_name))))
+```
+
+```{r}
+#| content: valuebox 
+#| title: Sum Payments (Millions)
+#| color: "#B4C8A8"
+
+list(value = 
+  dollar(round(sum(payments$payment_amount)/1e6))
+  )
+```
+
+
+## Col 2 {width="75%"}
+
+### Row {height="100%"}
+
+
+```{r}
+#| title: Payments Received by State
+
+# Make sure it stays as SF object
+payments_geo_mod <- payments_geo |> 
+  mutate(payment_quintile = case_when(
+    state_payments < quantile(state_payments, 0.2) ~ "1",
+    state_payments < quantile(state_payments, 0.4) ~ "2",
+    state_payments < quantile(state_payments, 0.6) ~ "3",
+    state_payments < quantile(state_payments, 0.8) ~ "4",
+    TRUE ~ "5"
+  )) |> 
+  st_as_sf() |> 
+  st_transform(crs = 4326)
+
+# Color palette
+state_pal <- colorFactor(c(med_orange,
+                           light_orange,
+                           yellow,
+                           light_green,
+                           med_green),
+                         payments_geo_mod$payment_quintile)
+
+# State labels
+msg <- paste("<b>State:</b>", payments_geo_mod$name,
+             "<br>",
+             "<b>Payments:</b>",
+             scales::dollar(payments_geo_mod$state_payments),
+             "<br>",
+             '<b>Top 3:</b>', payments_geo_mod$top_3_categories)
+
+# Legend labels 
+format_lab <- function (x) scales::dollar(round(x/1e6))
+
+q1 <- format_lab(quantile(payments_geo$state_payments, 0.2))
+q2 <- format_lab(quantile(payments_geo$state_payments, 0.4))
+q3 <- format_lab(quantile(payments_geo$state_payments, 0.6))
+q4 <- format_lab(quantile(payments_geo$state_payments, 0.8))
+
+state_pal_labels <- c(
+  glue("<{q1}"),
+  glue("{q1} - {q2}"),
+  glue("{q2} - {q3}"),
+  glue("{q3} - {q4}"),
+  glue(">{q4}")
+)
+
+
+# Create leaflet map
+leaflet(payments_geo_mod) |> 
+  addProviderTiles("CartoDB.Positron") |> 
+  addPolygons(color = "#333333",
+              fillColor = ~state_pal(payment_quintile),
+              fillOpacity = 1,
+              weight = 1,
+              popup = msg,
+              popupOptions = popupOptions(closeButton = TRUE)) |> 
+  addLegend("bottomleft",
+            pal = state_pal,
+            values = ~payment_quintile,
+            title = "State Payments (Millions)",
+            opacity = 1,
+            labFormat = function(type, cuts, p) {  
+                paste0(state_pal_labels)
+              }) |> 
+  # 40.02640543523691, -98.5168486298187
+  setView(lng = -98, lat = 38, zoom = 4)
+```
+
+
+# Health Areas
+
+
+## Col 1 {width = "60%"}
+
+
+
+```{r}
+#| title: Top 20 Health Areas
+
+highest_paid_cats <- payments |> 
+  group_by(product_cat_short) |> 
+  summarize(sum_payment = round(sum(payment_amount))) |>
+  arrange(desc(sum_payment)) |> 
+  filter(!is.na(product_cat_short)) |> 
+  mutate(product_cat_short = 
+           case_when(
+             nchar(product_cat_short) > 3 ~ 
+                       str_to_title(product_cat_short),
+                     T ~ str_to_upper(product_cat_short))
+         ) |> 
+  head(20) |> 
+  rename(`Field` = product_cat_short, 
+         `Payments` = sum_payment) 
+
+highest_paid_cats |>   
+  DT::datatable(options = list(dom = 't'),
+                rownames = F,
+                class = 'compact stripe',
+                width = '95%') |> 
+  DT::formatCurrency('Payments', digits = 0)  
+```
+
+
+
+## Col 2 {width = "40%"}
+
+
+### Row {.tabset}
+
+
+```{r}
+top_studies <- payments |> 
+  filter(!is.na(name_of_study)) |> 
+  group_by(name_of_study) |> 
+  summarize(sum_payments = sum(payment_amount)) |> 
+  arrange(desc(sum_payments)) |> 
+  head(20) |> 
+  rename(`Study` = name_of_study,
+         `Payments` = sum_payments) 
+```
+
+
+::: {.card title = "Top 100 Studies Key Words"}
+
+```{r}
+#| fig-width: 6
+#| fig-height: 4
+
+study_words <- payments |> 
+  filter(!is.na(name_of_study)) |> 
+  group_by(name_of_study) |> 
+  summarize(sum_payments = sum(payment_amount)) |> 
+  arrange(desc(sum_payments)) |> 
+  head(100) |> 
+  rename(`Study` = name_of_study,
+         `Payments` = sum_payments) |>  
+  
+  # extract words, remove filler text
+  unnest_tokens(output = word, input = Study) |> 
+  anti_join(stop_words) |> 
+  mutate(case_when(str_detect(word, "covid") ~ "covid",
+                   str_detect(word, "adult") ~ "adult")) |> 
+  filter(!str_detect(word, "\\d")) |> 
+  filter(!str_detect(word, "^ii+")) |> 
+  filter(!word %in% c("study", 
+                      "phase", 
+                      "randomized", 
+                      "blind", 
+                      "trial")) |> 
+  group_by(word) |> 
+  count(sort = T) |> 
+  
+  # limit to words that occur 5+ times
+  filter(n >= 5)
+
+study_words |> 
+  ggplot() + 
+  geom_text_wordcloud_area(aes(label = word, 
+                               size = n * 2,
+                               color = n)
+                           # ,color = "#333333"
+                           ) +
+  scale_size_area(max_size = 30) +
+  scale_color_gradient(low = dark_green, high = med_orange) +
+  theme(panel.background = element_rect(fill = "white"))
+```
+
+
+*Excludes common research terms: Study, Phase, Randomized, Blind, Trial*
+
+:::
+
+
+::: {.card title = "Top Studies List"}
+
+```{r}
+
+top_studies |> 
+  DT::datatable(
+   options = list(
+     dom = "t", # show table contents only
+     autoWidth = TRUE, # coerce colwidths
+     columnDefs = list(
+       list(width = '75%', targets = c(0)), # index starts at 0
+       list(width = '25%', targets = c(1))
+       )
+   ),
+   rownames = F,
+   class = 'compact stripe',
+   width = '95%'
+   ) |> 
+  DT::formatCurrency(c('Payments'), digits = 0)
+  
+```
+
+
+*Showing top 20 of 100 studies.*
+
+:::
+
+
+# Payees
+
+## Col 1 {width = '50%'}
+
+
+```{r}
+#| title: Top 20 Payees
+
+payments |> 
+  group_by(payee_name) |> 
+  summarize(sum_payments = sum(payment_amount)) |> 
+  arrange(desc(sum_payments)) |> 
+  head(20) |> 
+  rename(`Payments` = sum_payments,
+         `Manufacturer or Purchaser Name` = payee_name) |> 
+  DT::datatable(
+   options = list(
+     dom = "t", # show table contents only
+     autoWidth = TRUE, # coerce colwidths
+     columnDefs = list(
+       list(width = '60%', targets = c(0)), # index starts at 0
+       list(width = '40%', targets = c(1))
+       )
+   ),
+   rownames = F,
+   class = 'compact stripe',
+   width = '95%'
+   ) |> 
+  DT::formatCurrency(c('Payments'), digits = 0) 
+```
+
+
+## Col 2 {width = '50%'}
+
+
+### Row {.tabset}
+
+
+```{r}
+#| title: Category Payments (Millions)
+
+# New
+df_pay <- payments |> 
+  group_by(product_class) |> 
+  summarize(value = sum(payment_amount)) |> 
+  mutate(product_class = case_when(
+    is.na(product_class) ~ "Missing",
+    T ~ product_class
+  )) |> 
+  rename(group = product_class)
+  
+df_pay2 <- df_pay |> 
+  mutate(csum = rev(cumsum(rev(value))), 
+         pos = value/2 + lead(csum, 1),
+         pos = if_else(is.na(pos), value/2, pos))
+
+ggplot(df_pay,
+       aes(x = "", 
+           y = value, 
+           fill = fct_inorder(group))
+       ) +
+  geom_col(width = 1,
+           color = NA) +
+  geom_text(
+            aes(label = paste0(
+                scales::dollar(round(value/1e6)),
+                "M")),
+            position = position_stack(vjust = 0.5),
+            color = "#333333",
+            size = 7) +
+  coord_polar(theta = "y") +
+  scale_y_continuous(breaks = df_pay2$pos, 
+                     labels = df_pay$group) +
+  scale_fill_manual(values = c(light_green, # biological
+                               dark_green, # device
+                               med_orange, # drug
+                               dark_orange, # medical supplies
+                               yellow) # missing
+                    ) +
+  theme(axis.ticks = element_blank(),
+        axis.title = element_blank(),
+        axis.text = element_blank(), 
+        legend.position = "top",
+        legend.title = element_blank(),
+        legend.text = element_text(size = 16),
+        panel.background = element_rect(fill = "white"))
+
+```
+
+
+```{r}
+#| title: Top 20 Products
+#| fig-height: 7
+#| fig-width: 8
+
+top_20 <- payments |> 
+  filter(!is.na(product_name)) |> 
+  group_by(product_name) |> 
+  mutate(num_payments = n(),
+         sum_payments = sum(payment_amount),
+         category = str_to_title(paste(unique(product_cat_short),
+                            collapse = "; "))) |> 
+
+  slice(1) |> 
+  ungroup() |> 
+  select(product_name, 
+         num_payments,
+       sum_payments,
+       category,
+       product_class
+       ) |> 
+  arrange(desc(sum_payments)) |> 
+  head(20) |> 
+  mutate(product_name = case_when(
+    str_detect(product_name, "^Moderna Cov") ~ "COVID VACC",
+    T ~ product_name
+  )) |> 
+  mutate(product_name = factor(str_to_upper(product_name))) |> 
+  mutate(product_name = forcats::fct_reorder(
+    .f = product_name, 
+    .x = sum_payments
+    )) 
+
+ggplot(top_20) +
+  geom_bar(aes(x = product_name,
+               y = sum_payments,
+               fill = product_class),
+           stat = "identity",
+           width = 0.95)  +
+  geom_text(aes(x = product_name,
+                y = 1e7,
+                label = paste0(
+                  scales::dollar(round(sum_payments/1e6)),
+                  "M")
+                ),
+            color = "#333333",
+            size = 7,
+            hjust = 0) +
+  scale_y_continuous(labels = scales::label_dollar()) +
+  scale_fill_manual(
+    values = c(light_green, # bio
+               med_orange, # drug
+               light_orange, # not used
+               yellow # not used
+               )) +
+  coord_flip() +
+  theme_light() +
+  theme(legend.position = "bottom",
+        legend.title = element_blank(),
+        axis.title = element_blank(),
+        axis.text = element_text(size = 16),
+        legend.text = element_text(size = 16),
+        panel.grid.major.x = element_line(linewidth = 0.5))
+
+```
+
+
+
+
+```{r}
+#| title: Products Table
+
+top_20 |> 
+  select(-num_payments) |> 
+  select(`Product` = product_name,
+         `Field` = category,
+         `Payments` = sum_payments,
+         `Class` = product_class) |> 
+    DT::datatable(
+    options = list(
+     dom = "t", # show table contents only
+     autoWidth = TRUE, # coerce colwidths
+     columnDefs = list(
+       list(width = '30%', targets = c(0)), # index starts at 0
+       list(width = '35%', targets = c(1, 2))
+       )
+   ),
+   rownames = F,
+   class = 'compact stripe',
+   width = '95%'
+  ) |> 
+  DT::formatCurrency(c('Payments'), digits = 0) |> 
+  DT::formatStyle(
+    'Class',
+    backgroundColor = styleEqual(
+      sort(unique(top_20$product_class)), 
+      c(light_green, # bio
+        med_orange # drug
+        )
+    )
+  )
+```
+
+
+
+# Recipients
+
+
+## Col 1 {width = '60%'}
+
+
+### Row 
+
+```{r}
+#| title: Recipient Categories (Millions)
+
+recipients_tab <- payments |> 
+  group_by(covered_recipient_type) |> 
+  summarize(sum_payments = sum(payment_amount)) |> 
+  
+  # for coloring bars
+  mutate(group_individual = case_when(
+    covered_recipient_type %in% c(
+    "Covered Recipient Teaching Hospital",
+    "Non-covered Recipient Entity") ~ "Institution",
+    T ~ "Practitioner"
+  )) |> 
+    
+  # simplify lablels
+  mutate(covered_recipient_type = str_remove(
+    covered_recipient_type, "Recipient"
+  )) |> 
+  mutate(covered_recipient_type = str_remove(
+    covered_recipient_type, "Covered"
+  )) |> 
+  mutate(covered_recipient_type =
+           trimws(
+             str_replace_all(covered_recipient_type, "  ", " ")
+             )) |> 
+  
+  # sort bars
+  mutate(covered_recipient_type = forcats::fct_reorder(
+    .f = covered_recipient_type, 
+    .x = sum_payments
+    ))
+
+  
+ggplot(recipients_tab) +
+  geom_bar(aes(x = covered_recipient_type,
+               y = sum_payments,
+               fill = group_individual),
+           stat = "identity",
+           width = 0.95) +
+  geom_text(aes(x = covered_recipient_type,
+              y = 1e7,
+              label = paste0(
+                scales::dollar(round(sum_payments/1e6)),
+                "M")
+              ),
+          color = "#333333",
+          size = 7,
+          hjust = 0) +
+  scale_fill_manual(values = c(light_green, 
+                               yellow)) +
+  scale_y_continuous(labels = scales::label_dollar(scale = 1/1e6)) +
+  coord_flip() +
+  theme_light() +
+  theme(legend.position = "bottom",
+        legend.title = element_blank(),
+        axis.title = element_blank(),
+        axis.text = element_text(size = 16),
+        legend.text = element_text(size = 16),
+        panel.grid.major.x = element_line(linewidth = 0.5))
+
+
+```
+
+
+
+## Col 2 {width = '40%'}
+
+
+### Row {.tabset}
+
+
+```{r}
+group_tab <- payments |> 
+  filter(covered_recipient_type %in% c(
+    "Covered Recipient Teaching Hospital",
+    "Non-covered Recipient Entity"
+  )) |> 
+  mutate(group_name = case_when(
+    covered_recipient_type == "Covered Recipient Teaching Hospital" ~ str_to_upper(teaching_hospital_name), 
+    T ~ str_to_upper(noncovered_recipient_entity_name)
+  )) |> 
+
+  group_by(group_name) |> 
+  summarize(sum_payments = sum(payment_amount),
+            health_areas = paste(unique(product_cat_short), 
+                                 collapse = "; ")) |> 
+  arrange(desc(sum_payments)) |> 
+  head(10) |> 
+  mutate(health_areas = str_replace_all(
+    health_areas, "NA;*\\s*", ""
+  )) |> 
+  mutate(health_areas = str_remove_all(
+    health_areas, ";\\s$"
+  )) |> 
+  mutate(health_areas = str_replace_all(
+    str_to_title(health_areas), "Cns", "CNS"
+  )) |> 
+  select(`Institution` = group_name, 
+         `Fields (Hover for Details)` = health_areas,
+         `Payments` = sum_payments) 
+
+```
+
+::: {.card title = "Top 10 Institutions"}
+
+```{r}
+
+group_tab |> 
+  DT::datatable(
+   options = list(
+     dom = "t", # show table contents only
+     
+     # truncate to 50 characters
+     columnDefs = list(list(
+        targets = c(1),
+        render = JS(
+         "function(data, type, row, meta) {",
+         "return type === 'display' && data.length > 50 ?",
+         "'<span title=\"' + data + '\">' + data.substr(0, 50) + '...</span>' : data;",
+         "}")
+))
+   ),
+   rownames = F,
+   class = 'compact stripe',
+   width = '95%'
+   ) |> 
+  DT::formatCurrency(c('Payments'), digits = 0) |> 
+  DT::formatStyle('Payments',
+              background = styleColorBar(
+                1:max(group_tab$Payments),
+                light_green
+                ),
+              backgroundSize = '98% 88%',
+              backgroundRepeat = 'no-repeat',
+              backgroundPosition = 'center')
+```
+
+
+:::
+
+
+```{r}
+#| title: Top 10 Practitioners
+
+
+individual_tab <- payments |> 
+  filter(covered_recipient_type %in% c(
+    "Covered Recipient Non-Physician Practitioner",
+    "Covered Recipient Physician"
+  )) |> 
+  rowwise() |> 
+  mutate(practitioner_name = 
+           str_to_title(
+             paste0(covered_recipient_last_name, ", ",
+                 covered_recipient_first_name, " (NPI: ",
+                 covered_recipient_npi, ")"
+                 ))) |> 
+  mutate(practitioner_name = str_replace(
+    practitioner_name, "\\(Npi", "\\(NPI"
+  )) |> 
+  group_by(practitioner_name) |> 
+  summarize(sum_payments = sum(payment_amount),
+            health_areas = paste(unique(product_cat_short), 
+                                 collapse = "; ")) |> 
+  arrange(desc(sum_payments)) |> 
+  head(10) |> 
+  mutate(health_areas = str_replace_all(
+    health_areas, "NA;*\\s*", ""
+  )) |> 
+  mutate(health_areas = str_remove_all(
+    health_areas, ";\\s$"
+  )) |> 
+  mutate(health_areas = str_replace_all(
+    str_to_title(health_areas), "Cns", "CNS"
+  )) |> 
+  select(`Practitioner` = practitioner_name, 
+         `Fields` = health_areas,
+         `Payments` = sum_payments)
+
+individual_tab |> 
+  DT::datatable(
+   options = list(
+     dom = "t" # show table contents only
+   ),
+   rownames = F,
+   class = 'compact stripe',
+   width = '95%'
+   ) |> 
+  DT::formatCurrency(c('Payments'), digits = 0) |> 
+  DT::formatStyle('Payments',
+              background = styleColorBar(
+                1:max(individual_tab$Payments),
+                yellow
+                ),
+              backgroundSize = '98% 88%',
+              backgroundRepeat = 'no-repeat',
+              backgroundPosition = 'center')
+```
+
+
+
+
+
+

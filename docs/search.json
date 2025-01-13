@@ -1,0 +1,56 @@
+[
+  {
+    "objectID": "index.html",
+    "href": "index.html",
+    "title": "Open Payments",
+    "section": "",
+    "text": "Pharmaceutical companies and device manufacturers must submit disclose payments to the Centers for Medicare & Medicaid Services annually.\nThis Quarto dashboard analyzes research payments made to practitioners and institutions in 2023. It is intended for health professionals, journalists, and curious members of the public to see which disciplines receive high research activity, and who are key funding recipients.",
+    "crumbs": [
+      "Home"
+    ]
+  },
+  {
+    "objectID": "dashboard.html",
+    "href": "dashboard.html",
+    "title": "Open Research Payments 2023",
+    "section": "",
+    "text": "Placeholder stuff\nI will paste my lovely dashboard here eventually"
+  },
+  {
+    "objectID": "index.html#background",
+    "href": "index.html#background",
+    "title": "Open Payments",
+    "section": "",
+    "text": "Pharmaceutical companies and device manufacturers must submit disclose payments to the Centers for Medicare & Medicaid Services annually.\nThis Quarto dashboard analyzes research payments made to practitioners and institutions in 2023. It is intended for health professionals, journalists, and curious members of the public to see which disciplines receive high research activity, and who are key funding recipients.",
+    "crumbs": [
+      "Home"
+    ]
+  },
+  {
+    "objectID": "index.html#data",
+    "href": "index.html#data",
+    "title": "Open Payments",
+    "section": "Data",
+    "text": "Data\nThe following datasets are leveraged:\n\nCMS Open Payments for research in 2023\nrnaturalearth United States polygons",
+    "crumbs": [
+      "Home"
+    ]
+  },
+  {
+    "objectID": "index.html#tools",
+    "href": "index.html#tools",
+    "title": "Open Payments",
+    "section": "Tools",
+    "text": "Tools\n\nR Version\nThis webpage was built with R 4.3.1 and R Studio 2024.12.0.467.\n\n\nPackages\nData import and wrangling:\n\ndata.table\n\ndplyr\n\njanitor\ntidyr\n\nforcats\n\nString manipulation:\n\nstringr\nglue\n\ntidytext\n\nVisualization and tables:\n\nggplot2\n\nggwordcloud\n\nscales\nsf\n\nrnaturalearth\n\nleaflet\n\nDT",
+    "crumbs": [
+      "Home"
+    ]
+  },
+  {
+    "objectID": "index.html#dependencies",
+    "href": "index.html#dependencies",
+    "title": "Home Page",
+    "section": "Dependencies",
+    "text": "Dependencies\nOnce renv is activated, note here"
+  }
+]
