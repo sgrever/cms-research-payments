@@ -8,12 +8,11 @@ website:
     contents:
       - href: index.qmd
         text: Home
-      - href: dashboard.qmd
-        text: Dashboard
 
 format:
   html:
     theme: [cosmo, styles.scss]
+    mainfont: Archivo
     toc: true
 
 
