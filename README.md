@@ -12,7 +12,7 @@ This Quarto dashboard analyzes research payments made to practitioners and insti
 ### Preview  
 
 
-![](img/overview_tab2.png)
+![](img/overview-tab2.png)
 
 
 
