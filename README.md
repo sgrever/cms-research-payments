@@ -12,7 +12,7 @@ This Quarto dashboard analyzes research payments made to practitioners and insti
 ### Preview  
 
 
-![](img/overview_tab.png)
+![](img/overview_tab2.png)
 
 
 
@@ -36,23 +36,23 @@ This webpage was built with R 4.3.1 and R Studio 2024.12.0.467.
 
 Data import and wrangling:  
 
-* data.table  
-* dplyr  
-* janitor 
-* tidyr  
-* forcats  
+* [data.table](https://cran.r-project.org/web/packages/data.table/index.html)  
+* [dplyr](https://dplyr.tidyverse.org/)  
+* [janitor](https://cran.r-project.org/web/packages/janitor/index.html) 
+* [tidyr](https://tidyr.tidyverse.org/)  
+* [forcats](https://forcats.tidyverse.org/)  
 
 String manipulation:  
 
-* stringr 
-* glue  
-* tidytext  
+* [stringr](https://stringr.tidyverse.org/) 
+* [glue](https://glue.tidyverse.org/)  
+* [tidytext](https://cran.r-project.org/web/packages/tidytext/index.html)  
 
 Visualization and tables:  
 
-* ggplot2  
-* ggwordcloud  
-* scales
-* rnaturalearth  
-* leaflet  
-* DT  
+* [ggplot2](https://ggplot2.tidyverse.org/)  
+* [ggwordcloud](https://lepennec.github.io/ggwordcloud/)  
+* [scales](https://scales.r-lib.org/)
+* [rnaturalearth](https://github.com/ropensci/rnaturalearth)  
+* [leaflet](https://rstudio.github.io/leaflet/)  
+* [DT](https://rstudio.github.io/DT/)  
